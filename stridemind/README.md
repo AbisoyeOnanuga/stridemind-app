@@ -1,16 +1,26 @@
-# stridemind
+# StrideMind 🏃‍♂️
 
-A new Flutter project.
+**StrideMind** is a smart marathon training companion app built with Flutter. It integrates with Strava to deliver adaptive daily workout recommendations based on your training plan, recovery metrics, and fueling needs.
 
-## Getting Started
+## 🚀 Features
 
-This project is a starting point for a Flutter application.
+- Sync workouts from Strava
+- Analyze pace, cadence, heart rate, and terrain
+- AI-driven workout adjustments based on recovery and fatigue
+- Fueling guidance (pre/intra/post-run)
+- User logs for pain, sleep, and effort
+- Countdown to race day and goal tracking
 
-A few resources to get you started if this is your first Flutter project:
+## 📱 Getting Started
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### Prerequisites
+- Flutter SDK
+- Android Studio or emulator
+- Strava developer account (for API access)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### Installation
+```bash
+git clone https://github.com/yourusername/stridemind.git
+cd stridemind
+flutter pub get
+flutter run
