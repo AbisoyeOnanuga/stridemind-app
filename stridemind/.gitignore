@@ -51,3 +51,5 @@ ios/Flutter/Flutter.framework
 *.iml
 *.log
 .vscode/
+lib/strava_config.dart
+.env
