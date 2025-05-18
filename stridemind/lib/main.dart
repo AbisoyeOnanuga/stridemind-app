@@ -1,24 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app_links/app_links.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:stridemind/services/strava_auth_service.dart';
+import 'package:stridemind/pages/splash_page.dart';
+import 'package:stridemind/pages/home_page.dart';
+import 'package:stridemind/strava_config.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
+
+  // --- Temporary Debugging ---
+  // Use this to verify that your .env variables are loaded correctly.
+  // You can remove this once you've confirmed it's working.
+  debugPrint('Strava Client ID Loaded: ${dotenv.env['STRAVA_CLIENT_ID']}');
+  // -------------------------
+
   runApp(StrideMindApp());
 }
 
+final navigatorKey = GlobalKey<NavigatorState>();
+
 class StrideMindApp extends StatefulWidget {
+  const StrideMindApp({super.key});
+
   @override
   State<StrideMindApp> createState() => _StrideMindAppState();
 }
 
 class _StrideMindAppState extends State<StrideMindApp> {
   late final AppLinks _appLinks;
-  final StravaAuthService _stravaAuthService = StravaAuthService();
+  final StravaAuthService _stravaAuthService = StravaAuthService(
+      clientId: stravaClientId,
+      clientSecret: stravaClientSecret,
+      redirectUri: stravaRedirectUri);
 
   @override
   void initState() {
     super.initState();
-    initAppLinks();
+    // The logic for handling redirects is different for mobile and web.
+    if (kIsWeb) {
+      // On the web, the redirect URL is the current page URL.
+      handleIncomingUri(Uri.base);
+    } else {
+      initAppLinks();
+    }
   }
 
   void initAppLinks() async {
@@ -38,86 +65,32 @@ class _StrideMindAppState extends State<StrideMindApp> {
     }
   }
 
-  void handleIncomingUri(Uri? uri) {
+  void handleIncomingUri(Uri? uri) async {
     if (uri != null && uri.queryParameters.containsKey('code')) {
-      final code = uri.queryParameters['code'];
+      final code = uri.queryParameters['code']!;
       print("Received Strava code: $code");
-      _stravaAuthService.exchangeCodeForToken(code!); // ✅ Integrate your auth logic
+      final success = await _stravaAuthService.exchangeCodeForToken(code);
+
+      if (success) {
+        navigatorKey.currentState?.pushReplacement(
+          MaterialPageRoute(
+              builder: (context) => HomePage(authService: _stravaAuthService)),
+        );
+      } else {
+        ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+          const SnackBar(content: Text('Login failed. Please try again.')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: Text("Strava Login Example")),
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Launching Strava login...')),
-              );
-              _stravaAuthService.loginWithStrava(); // ✅ Trigger login
-            },
-            child: Text("Login with Strava"),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class WorkoutCard extends StatelessWidget {
-  final String prescribed;
-  final String adjusted;
-  final int recoveryScore;
-
-  const WorkoutCard({
-    required this.prescribed,
-    required this.adjusted,
-    required this.recoveryScore,
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Card(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-      margin: const EdgeInsets.all(16),
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Prescribed: $prescribed"),
-            Text("Adjusted: $adjusted"),
-            Text("Recovery Score: $recoveryScore"),
-          ],
-        ),
-      ),
+      navigatorKey: navigatorKey,
+      title: 'StrideMind',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: SplashPage(authService: _stravaAuthService),
     );
   }
 }
