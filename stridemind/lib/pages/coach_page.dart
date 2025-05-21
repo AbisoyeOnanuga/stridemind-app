@@ -3,6 +3,7 @@ import 'package:stridemind/models/strava_activity.dart' as strava_models;
 import 'package:stridemind/services/strava_api_service.dart';
 import 'package:stridemind/services/strava_auth_service.dart';
 import 'package:stridemind/services/feedback_service.dart';
+import 'package:stridemind/services/prompt_service.dart';
 
 class CoachPage extends StatefulWidget {
   final StravaAuthService authService;
@@ -17,6 +18,7 @@ class _CoachPageState extends State<CoachPage> {
   String? _aiFeedback;
   bool _isLoading = false;
   final _feedbackService = FeedbackService();
+  final _promptService = PromptService();
   Future<List<strava_models.StravaActivity>>? _todaysActivitiesFuture;
 
   @override
@@ -72,7 +74,7 @@ class _CoachPageState extends State<CoachPage> {
         throw Exception("Workout data not loaded yet.");
       }
 
-      final prompt = _buildPrompt(
+      final prompt = _promptService.buildFeedbackPrompt(
         _noteController.text,
         todaysActivities,
       );
@@ -223,73 +225,6 @@ class _CoachPageState extends State<CoachPage> {
         );
       },
     );
-  }
-
-  String _buildPrompt(
-      String dailyLog, List<strava_models.StravaActivity> activities) {
-    final workoutContext = _formatWorkoutContext(activities);
-
-    return """
-You are an expert running coach named StrideMind. Your goal is to provide supportive, actionable, and personalized feedback to runners based on their daily log and workout data.
-
-Here is the runner's log for today:
----
-$dailyLog
----
-
-Here is the runner's workout data for today:
----
-$workoutContext
----
-
-Based on this information, provide feedback that covers these areas:
-1.  **Recovery:** Comment on their perceived effort, fatigue, or any pains mentioned. Suggest recovery strategies (e.g., sleep, nutrition, stretching).
-2.  **Adjustments:** Based on the data and their log, suggest any adjustments to their upcoming training. If things look good, affirm their current plan.
-3.  **Encouragement:** Provide positive reinforcement and motivation. Highlight their successes and consistency.
-
-Keep the tone encouraging and professional. Use markdown for formatting, like **bolding** key terms.
-""";
-  }
-
-  String _formatWorkoutContext(List<strava_models.StravaActivity> activities) {
-    if (activities.isEmpty) {
-      return "No workouts logged today.";
-    }
-
-    final buffer = StringBuffer();
-    for (final activity in activities) {
-      buffer.writeln("Activity: ${activity.name} (${activity.type})");
-      buffer.writeln("Distance: ${_formatDistance(activity.distance)}");
-      buffer.writeln("Moving Time: ${_formatDuration(activity.movingTime)}");
-
-      if (activity.type.toLowerCase() == 'run' &&
-          activity.averageSpeed != null) {
-        if (activity.averageSpeed! > 0) {
-          buffer.writeln("Average Pace: ${_formatPace(activity.averageSpeed!)} /km");
-        }
-        if (activity.averageHeartrate != null) {
-          buffer.writeln(
-              "Average Heart Rate: ${activity.averageHeartrate!.toStringAsFixed(0)} bpm");
-        }
-        if (activity.averageCadence != null) {
-          buffer.writeln(
-              "Average Cadence: ${(activity.averageCadence! * 2).toStringAsFixed(0)} spm");
-        }
-        if (activity.splits != null && activity.splits!.isNotEmpty) {
-          buffer.writeln("Splits:");
-          final kmSplits =
-              activity.splits!.where((s) => (s.distance - 1000.0).abs() < 5.0).toList();
-          for (var i = 0; i < kmSplits.length; i++) {
-            final split = kmSplits[i];
-            buffer.writeln(
-                "  - Km ${i + 1}: ${_formatPace(split.averageSpeed)} (${_formatDuration(split.movingTime)})");
-          }
-        }
-      }
-      buffer.writeln(); // Add a blank line between activities
-    }
-
-    return buffer.toString();
   }
 
   Widget _buildRunDetails(strava_models.StravaActivity activity) {
