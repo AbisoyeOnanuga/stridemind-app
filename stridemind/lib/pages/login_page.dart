@@ -1,34 +1,46 @@
 import 'package:flutter/material.dart';
 import '../services/strava_auth_service.dart';
-import 'package:app_links/app_links.dart';
 
-void initDeepLinkListener() {
-  final appLinks = AppLinks();
+class LoginPage extends StatefulWidget {
+  final StravaAuthService authService;
+  const LoginPage({super.key, required this.authService});
 
-  appLinks.uriLinkStream.listen((Uri? uri) {
-    if (uri != null && uri.scheme == 'myapp') {
-      final code = uri.queryParameters['code'];
-      if (code != null) {
-        StravaAuthService().exchangeCodeForToken(code);
-      }
-    }
-  });
+  @override
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class LoginPage extends StatelessWidget {
-  LoginPage({super.key});
-  final StravaAuthService _authService = StravaAuthService();
+class _LoginPageState extends State<LoginPage> {
+  bool _isLoading = false;
+
+  Future<void> _login() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await widget.authService.loginWithStrava();
+      // The app will lose focus here. When it returns, the deep link handler in main.dart will take over.
+    } catch (e) {
+      // Handle cases where the URL can't be launched.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error launching Strava login: $e')),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Connect to Strava')),
+      appBar: AppBar(title: const Text('Connect to Strava')),
       body: Center(
         child: ElevatedButton(
-          onPressed: () {
-            _authService.loginWithStrava();
-          },
-          child: Text('Connect to Strava'),
+          onPressed: _isLoading ? null : _login,
+          child: _isLoading
+              ? const CircularProgressIndicator(color: Colors.white)
+              : const Text('Connect with Strava'),
         ),
       ),
     );
