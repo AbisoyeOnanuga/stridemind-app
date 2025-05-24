@@ -5,7 +5,7 @@ import '../widgets/feedback_card.dart';
 import './dashboard_page.dart';
 
 class MoodLoggerPage extends StatefulWidget {
-  const MoodLoggerPage({Key? key}) : super(key: key);
+  const MoodLoggerPage({super.key});
 
   @override
   State<MoodLoggerPage> createState() => _MoodLoggerPageState();
