@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class FeedbackCard extends StatelessWidget {
   final String feedback;
 
-  const FeedbackCard({Key? key, required this.feedback}) : super(key: key);
+  const FeedbackCard({super.key, required this.feedback});
 
   @override
   Widget build(BuildContext context) {
