@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class JournalEntry extends StatelessWidget {
   final TextEditingController controller;
 
-  const JournalEntry({Key? key, required this.controller}) : super(key: key);
+  const JournalEntry({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
