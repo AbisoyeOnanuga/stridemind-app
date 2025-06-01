@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class MoodSelector extends StatelessWidget {
   final Function(String) onMoodSelected;
 
-  const MoodSelector({Key? key, required this.onMoodSelected}) : super(key: key);
+  const MoodSelector({super.key, required this.onMoodSelected});
 
   @override
   Widget build(BuildContext context) {
