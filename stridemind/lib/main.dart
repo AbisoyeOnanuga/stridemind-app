@@ -53,13 +53,15 @@ class _StrideMindAppState extends State<StrideMindApp> {
 
     try {
       // Handles cold start
-      final Uri? initialUri = await _appLinks.getInitialAppLink();
-      handleIncomingUri(initialUri);
+      final Uri? initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        handleIncomingUri(initialUri);
+      }
 
       // Handles runtime deep links
-      _appLinks.uriLinkStream.listen((Uri? uri) {
+      _appLinks.uriLinkStream.listen((Uri uri) {
         handleIncomingUri(uri);
-      });
+      }, onError: (err) => print('onLinkError: $err'));
     } catch (e) {
       print("Error handling deep link: $e");
     }
