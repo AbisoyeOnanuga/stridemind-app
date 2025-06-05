@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stridemind/models/strava_activity.dart' as strava_models;
 import 'package:stridemind/services/strava_api_service.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:stridemind/services/strava_auth_service.dart';
 import 'package:stridemind/services/feedback_service.dart';
 import 'package:stridemind/services/prompt_service.dart';
@@ -15,7 +18,8 @@ class CoachPage extends StatefulWidget {
 
 class _CoachPageState extends State<CoachPage> {
   final _noteController = TextEditingController();
-  String? _aiFeedback;
+  List<dynamic>? _aiFeedback; // For displaying the current feedback or error
+  List<Map<String, dynamic>>? _conversationHistory; // For persistence
   bool _isLoading = false;
   final _feedbackService = FeedbackService();
   final _promptService = PromptService();
@@ -25,6 +29,7 @@ class _CoachPageState extends State<CoachPage> {
   void initState() {
     super.initState();
     _todaysActivitiesFuture = _getTodaysActivities();
+    _loadConversationHistory();
   }
 
   Future<List<strava_models.StravaActivity>> _getTodaysActivities() async {
@@ -55,6 +60,26 @@ class _CoachPageState extends State<CoachPage> {
     return detailedActivities;
   }
 
+  Future<void> _loadConversationHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final historyString = prefs.getString('conversation_history');
+    if (historyString != null) {
+      if (mounted) {
+        final decoded = jsonDecode(historyString) as List<dynamic>;
+        final history =
+            decoded.map((e) => e as Map<String, dynamic>).toList();
+        setState(() {
+          _conversationHistory = history;
+          if (history.isNotEmpty) {
+            // Display the last feedback from history on initial load
+            _aiFeedback =
+                history.last['feedback']?['feedback'] as List<dynamic>?;
+          }
+        });
+      }
+    }
+  }
+
   void _generateFeedback() async {
     if (_noteController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -65,7 +90,7 @@ class _CoachPageState extends State<CoachPage> {
 
     setState(() {
       _isLoading = true;
-      _aiFeedback = null;
+      _aiFeedback = null; // Clear previous feedback while loading
     });
 
     try {
@@ -74,24 +99,52 @@ class _CoachPageState extends State<CoachPage> {
         throw Exception("Workout data not loaded yet.");
       }
 
+      final history = _conversationHistory ?? [];
       final prompt = _promptService.buildFeedbackPrompt(
         _noteController.text,
         todaysActivities,
+        history,
       );
 
-      final feedback = await _feedbackService.getFeedback(prompt);
+      final feedbackJsonString = await _feedbackService.getFeedback(prompt);
+      // The AI might return the JSON string wrapped in markdown ```json ... ```, so we clean it.
+      final cleanedJson =
+          feedbackJsonString.replaceAll('```json', '').replaceAll('```', '').trim();
+      final feedbackData = jsonDecode(cleanedJson);
+
+      // Create new turn and add to history
+      final newTurn = {
+        'log': _noteController.text,
+        'feedback': feedbackData,
+      };
+      final updatedHistory = List<Map<String, dynamic>>.from(history)
+        ..add(newTurn);
+
+      // Optional: Trim history to keep it from growing too large
+      const maxHistoryLength = 10;
+      if (updatedHistory.length > maxHistoryLength) {
+        updatedHistory.removeRange(0, updatedHistory.length - maxHistoryLength);
+      }
+
+      // Save the updated history
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('conversation_history', jsonEncode(updatedHistory));
 
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _aiFeedback = feedback;
+          _conversationHistory = updatedHistory;
+          _aiFeedback = feedbackData['feedback'] as List<dynamic>?; // Set display
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _aiFeedback = "Failed to get feedback: ${e.toString()}";
+          _aiFeedback = [
+            // Set display to an error message, but DO NOT save to history
+            {'type': 'heading', 'content': {'title': 'Error', 'text': 'Failed to get feedback: ${e.toString()}'}}
+          ];
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -156,12 +209,118 @@ class _CoachPageState extends State<CoachPage> {
           _buildSectionCard(
             title: 'AI Coach Feedback',
             icon: Icons.chat_bubble_outline,
-            child: Text(
-              _aiFeedback!,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            child: _buildFeedbackContent(_aiFeedback!),
           ),
       ],
+    );
+  }
+
+  Widget _buildFeedbackContent(List<dynamic> feedbackSections) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: feedbackSections.map<Widget>((section) {
+        final type = section['type'];
+        final content = section['content'];
+
+        switch (type) {
+          case 'heading':
+            return _buildHeadingSection(content);
+          case 'table':
+            return _buildTableSection(content);
+          case 'bold_text':
+            return _buildBoldTextSection(content);
+          default:
+            return Text('Unknown content type: $type');
+        }
+      }).toList(),
+    );
+  }
+
+  Widget _buildHeadingSection(dynamic content) {
+    final title = content['title'] as String? ?? 'Feedback';
+    final text = content['text'] as String? ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          MarkdownBody(
+            data: text,
+            styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+              p: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableSection(dynamic content) {
+    final title = content['title'] as String? ?? '';
+    final headers = (content['headers'] as List<dynamic>?)
+            ?.map((h) => h.toString())
+            .toList() ??
+        [];
+    final rows = (content['rows'] as List<dynamic>?)
+            ?.map((row) =>
+                (row as List<dynamic>).map((cell) => cell.toString()).toList())
+            .toList() ??
+        [];
+
+    if (headers.isEmpty || rows.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: headers
+                  .map((header) => DataColumn(
+                          label: Text(header,
+                              style: const TextStyle(fontWeight: FontWeight.bold))))
+                  .toList(),
+              rows: rows
+                  .map((row) => DataRow(
+                      cells: row.map((cell) => DataCell(Text(cell))).toList()))
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBoldTextSection(dynamic content) {
+    final text = content as String? ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Text(
+        text,
+        style: Theme.of(context)
+            .textTheme
+            .bodyMedium
+            ?.copyWith(fontWeight: FontWeight.bold),
+      ),
     );
   }
 
@@ -214,12 +373,12 @@ class _CoachPageState extends State<CoachPage> {
             _buildContextTile(
               icon: Icons.event_note,
               title: 'Training Plan',
-              subtitle: 'Tomorrow: Rest Day',
+              subtitle: 'coming soon...',
             ),
             _buildContextTile(
               icon: Icons.style,
               title: 'Gear',
-              subtitle: 'Running Shoes (250km used)',
+              subtitle: 'coming soon...',
             ),
           ],
         );
