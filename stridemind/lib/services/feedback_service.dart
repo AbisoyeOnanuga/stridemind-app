@@ -6,8 +6,7 @@ class FeedbackService {
 
   FeedbackService()
       : _model = GenerativeModel(
-          // For 'gemini-pro', use `model: 'gemini-pro'`
-          model: 'gemini-1.5-flash-latest',
+          model: 'gemini-2.5-flash',
           apiKey: dotenv.env['GEMINI_API_KEY']!,
         );
 
