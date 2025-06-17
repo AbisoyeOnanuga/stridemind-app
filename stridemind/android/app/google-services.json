@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "82779433934",
+    "project_id": "stridemind-a3716",
+    "storage_bucket": "stridemind-a3716.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:82779433934:android:8d26eefb004058b88a999f",
+        "android_client_info": {
+          "package_name": "com.example.stridemind"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1QmG2ckuIo8pTynVuOK-HR9OkN-NjWro"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
