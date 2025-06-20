@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stridemind/models/strava_activity.dart' as strava_models;
 import 'package:stridemind/services/strava_api_service.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:stridemind/services/strava_auth_service.dart';
 import 'package:stridemind/services/feedback_service.dart';
 import 'package:stridemind/services/prompt_service.dart';
+import 'package:stridemind/services/database_service.dart';
 
 class CoachPage extends StatefulWidget {
   final StravaAuthService authService;
@@ -23,6 +23,7 @@ class _CoachPageState extends State<CoachPage> {
   bool _isLoading = false;
   final _feedbackService = FeedbackService();
   final _promptService = PromptService();
+  final _dbService = DatabaseService();
   Future<List<strava_models.StravaActivity>>? _todaysActivitiesFuture;
 
   @override
@@ -61,22 +62,14 @@ class _CoachPageState extends State<CoachPage> {
   }
 
   Future<void> _loadConversationHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final historyString = prefs.getString('conversation_history');
-    if (historyString != null) {
-      if (mounted) {
-        final decoded = jsonDecode(historyString) as List<dynamic>;
-        final history =
-            decoded.map((e) => e as Map<String, dynamic>).toList();
-        setState(() {
-          _conversationHistory = history;
-          if (history.isNotEmpty) {
-            // Display the last feedback from history on initial load
-            _aiFeedback =
-                history.last['feedback']?['feedback'] as List<dynamic>?;
-          }
-        });
-      }
+    final history = await _dbService.getConversationHistory();
+    if (mounted && history.isNotEmpty) {
+      setState(() {
+        _conversationHistory = history;
+        // Display the last feedback from history on initial load
+        _aiFeedback =
+            history.last['feedback']?['feedback'] as List<dynamic>?;
+      });
     }
   }
 
@@ -117,18 +110,17 @@ class _CoachPageState extends State<CoachPage> {
         'log': _noteController.text,
         'feedback': feedbackData,
       };
-      final updatedHistory = List<Map<String, dynamic>>.from(history)
-        ..add(newTurn);
 
-      // Optional: Trim history to keep it from growing too large
+      // Save to DB. The service will handle trimming.
+      await _dbService.addConversationTurn(newTurn);
+
+      // For immediate UI update, we can just update the local list.
+      // We should also trim it to match what the DB is doing.
+      final updatedHistory = List<Map<String, dynamic>>.from(history)..add(newTurn);
       const maxHistoryLength = 10;
       if (updatedHistory.length > maxHistoryLength) {
-        updatedHistory.removeRange(0, updatedHistory.length - maxHistoryLength);
+        updatedHistory.removeAt(0); // remove the oldest one
       }
-
-      // Save the updated history
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('conversation_history', jsonEncode(updatedHistory));
 
       if (mounted) {
         setState(() {
